@@ -1,0 +1,12 @@
+# Ignore environment file with secrets
+.env
+
+# Docker / logs
+*.log
+
+# Editor configs
+.vscode/
+.idea/
+
+# OS
+.DS_Store

@@ -1,0 +1,88 @@
+version: "3"
+
+services:
+  mongodb:
+    image: mongo:6.0.18
+    ports:
+      - "27017:27017"
+    restart: on-failure
+    networks:
+      - graylog
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    env_file:
+      - .env
+
+  opensearch:
+    image: opensearchproject/opensearch:2.15.0
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+      - bootstrap.memory_lock=true
+      - discovery.type=single-node
+      - action.auto_create_index=false
+      - plugins.security.ssl.http.enabled=false
+      - plugins.security.disabled=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=${OPENSEARCH_INITIAL_ADMIN_PASSWORD}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9203:9200"
+      - "9303:9300"
+    restart: on-failure
+    networks:
+      - graylog
+    volumes:
+      - opensearch:/usr/share/opensearch/data
+    env_file:
+      - .env
+
+  graylog:
+    image: graylog/graylog:6.1
+    depends_on:
+      mongodb:
+        condition: service_started
+      opensearch:
+        condition: service_started
+    entrypoint: >
+      /usr/bin/tini -- wait-for-it opensearch:9200 -- /docker-entrypoint.sh
+    environment:
+      GRAYLOG_NODE_ID_FILE: /usr/share/graylog/data/config/node-id
+      GRAYLOG_HTTP_BIND_ADDRESS: 0.0.0.0:9000
+      GRAYLOG_ELASTICSEARCH_HOSTS: http://opensearch:9200
+      GRAYLOG_MONGODB_URI: mongodb://mongodb:27017/graylog
+      GRAYLOG_REPORT_DISABLE_SANDBOX: "true"
+      GRAYLOG_HTTP_EXTERNAL_URI: http://127.0.0.1:9000/
+      GRAYLOG_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET}
+      GRAYLOG_ROOT_PASSWORD_SHA2: ${GRAYLOG_ROOT_PASSWORD_SHA2}
+    ports:
+      - "9000:9000"
+      - "5044:5044"
+      - "5140:5140"
+      - "5140:5140/udp"
+      - "12201:12201"
+      - "12201:12201/udp"
+      - "13301:13301"
+      - "13302:13302"
+    restart: on-failure
+    networks:
+      - graylog
+    volumes:
+      - graylog_data:/usr/share/graylog/data
+    env_file:
+      - .env
+
+networks:
+  graylog:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+  opensearch:
+  graylog_data:
